@@ -62,6 +62,7 @@ type Upgrade struct {
 	Description              string
 	PostRenderer             postrender.PostRenderer
 	DisableOpenAPIValidation bool
+	Replace                  bool
 }
 
 // NewUpgrade creates a new Upgrade object with the given configuration.
@@ -122,10 +123,31 @@ func (u *Upgrade) prepareUpgrade(name string, chart *chart.Chart, vals map[strin
 		return nil, nil, errMissingChart
 	}
 
-	// finds the deployed release with the given name
-	currentRelease, err := u.cfg.Releases.Deployed(name)
+	// finds the last non-deleted release with the given name
+	lastRelease, err := u.cfg.Releases.Last(name)
 	if err != nil {
+		// to keep existing behavior of returning the "%q has no deployed releases" error when an existing release does not exist
+		if strings.Contains(err.Error(), "no revision for release") {
+			return nil, nil, errors.Errorf("%q has no deployed releases", name)
+		}
 		return nil, nil, err
+	}
+
+	var currentRelease *release.Release
+	if lastRelease.Info.Status == release.StatusDeployed {
+		// no need to retrieve the last deployed release from storage as the last release is deployed
+		currentRelease = lastRelease
+	} else {
+		// finds the deployed release with the given name
+		currentRelease, err = u.cfg.Releases.Deployed(name)
+		if err != nil {
+			if u.Replace && strings.Contains(err.Error(), "has no deployed releases") &&
+				(lastRelease.Info.Status == release.StatusFailed || lastRelease.Info.Status == release.StatusPendingInstall || lastRelease.Info.Status == release.StatusUninstalled) {
+				currentRelease = lastRelease
+			} else {
+				return nil, nil, err
+			}
+		}
 	}
 
 	// determine if values will be reused
@@ -135,12 +157,6 @@ func (u *Upgrade) prepareUpgrade(name string, chart *chart.Chart, vals map[strin
 	}
 
 	if err := chartutil.ProcessDependencies(chart, vals); err != nil {
-		return nil, nil, err
-	}
-
-	// finds the non-deleted release with the given name
-	lastRelease, err := u.cfg.Releases.Last(name)
-	if err != nil {
 		return nil, nil, err
 	}
 

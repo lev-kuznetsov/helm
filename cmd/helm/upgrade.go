@@ -88,7 +88,6 @@ func newUpgradeCmd(cfg *action.Configuration, out io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-
 			if client.Install {
 				// If a release does not exist, install it. If another error occurs during
 				// the check, ignore the error and continue with the upgrade.
@@ -176,6 +175,7 @@ func newUpgradeCmd(cfg *action.Configuration, out io.Writer) *cobra.Command {
 	f.BoolVar(&client.CleanupOnFail, "cleanup-on-fail", false, "allow deletion of new resources created in this upgrade when upgrade fails")
 	f.BoolVar(&client.SubNotes, "render-subchart-notes", false, "if set, render subchart notes along with the parent")
 	f.StringVar(&client.Description, "description", "", "add a custom description")
+	f.BoolVar(&client.Replace, "replace", false, "if no deployed version of the release is available, replace an uninstalled, pending install, or failed release which remains in the history. If no prior failed, uninstalled, pending install or deployed release is available, --replace will not install a new release unless --install is also specified. This is unsafe in production")
 	addChartPathOptionsFlags(f, &client.ChartPathOptions)
 	addValueOptionsFlags(f, valueOpts)
 	bindOutputFlag(cmd, &outfmt)
